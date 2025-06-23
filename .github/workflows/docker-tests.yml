@@ -85,7 +85,7 @@ jobs:
     - name: Test Summary
       if: always()
       run: |
-        echo "## 🧪 Test Results Summary" >> $GITHUB_STEP_SUMMARY
+        echo "## Test Results Summary" >> $GITHUB_STEP_SUMMARY
         echo "- **Environment**: Docker Containers" >> $GITHUB_STEP_SUMMARY
         echo "- **API**: Mock Spring Boot Service" >> $GITHUB_STEP_SUMMARY
         echo "- **Tests**: TestNG + REST Assured" >> $GITHUB_STEP_SUMMARY

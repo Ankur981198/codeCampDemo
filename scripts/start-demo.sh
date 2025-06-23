@@ -54,4 +54,3 @@ find . -name "TEST-*.xml" -path "*/surefire-reports/*" 2>/dev/null
 
 echo ""
 echo "🛑 Cleanup: docker stop final-api && docker rm final-api"
-

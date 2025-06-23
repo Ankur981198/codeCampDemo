@@ -7,6 +7,14 @@ on:
     branches: [ main ]
   workflow_dispatch:
 
+# Add permissions for test reporting
+permissions:
+  contents: read
+  checks: write
+  pull-requests: write
+  actions: read
+
+
 jobs:
   api-tests:
     runs-on: ubuntu-latest

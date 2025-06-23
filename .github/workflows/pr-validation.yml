@@ -1,0 +1,74 @@
+name: PR Validation
+
+on:
+  pull_request:
+    branches: [ main, develop ]
+    types: [opened, synchronize, reopened]
+
+jobs:
+  validate-pr:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 📥 Checkout PR
+      uses: actions/checkout@v4
+      
+    - name: Check PR Title
+      run: |
+        PR_TITLE="${{ github.event.pull_request.title }}"
+        echo "PR Title: $PR_TITLE"
+        
+        # Check for conventional commit format
+        if [[ $PR_TITLE =~ ^(feat|fix|docs|style|refactor|test|chore)(\(.+\))?: .+ ]]; then
+          echo "PR title follows conventional commit format"
+        else
+          echo "PR title should follow format: type(scope): description"
+          echo "Examples: feat: add new test, fix(api): resolve connection issue"
+          exit 1
+        fi
+        
+    - name: 🧪 Quick Test Build
+      run: |
+        echo "🏗️ Testing Docker builds..."
+        cd mock-api && docker build -t pr-api .
+        cd ../api-tests && docker build -t pr-tests .
+        echo "Docker builds successful"
+        
+    - name: 🚀 Quick Smoke Test
+      run: |
+        echo "🚀 Running quick validation..."
+        docker run -d --name pr-api -p 8090:8090 pr-api
+        sleep 15
+        
+        # Quick health check
+        if curl -f http://localhost:8090/api/tasks/health; then
+          echo "Quick smoke test passed"
+        else
+          echo "Quick smoke test failed"
+          docker logs pr-api
+          exit 1
+        fi
+        
+    - name: Cleanup
+      if: always()
+      run: |
+        docker stop pr-api || true
+        docker rm pr-api || true
+        
+    - name: Comment on PR
+      if: success()
+      uses: actions/github-script@v7
+      with:
+        script: |
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: `## PR Validation Passed
+            
+            - Docker builds: **Success**
+            - Smoke tests: **Passed**  
+            - Title format: **Valid**
+            
+            Ready for review! 🚀`
+          });

@@ -1,0 +1,111 @@
+name: Docker API Tests
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  api-tests:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+      
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+      
+    - name: Build Mock API
+      run: |
+        cd mock-api
+        docker build -t mock-api:latest .
+        
+    - name: Build Test Suite
+      run: |
+        cd api-tests
+        docker build -t api-tests:latest .
+        
+    - name: Start Mock API
+      run: |
+        docker run -d --name mock-api -p 8090:8090 mock-api:latest
+        
+    - name: Wait for API
+      run: |
+        echo "Waiting for API to be ready..."
+        for i in {1..30}; do
+          if curl -f http://localhost:8090/api/tasks/health >/dev/null 2>&1; then
+            echo "✅ API is ready!"
+            break
+          fi
+          echo "⏳ Attempt $i/30..."
+          sleep 2
+        done
+        
+        # Final check
+        curl http://localhost:8090/api/tasks/health || exit 1
+        
+    - name: Run Tests
+      run: |
+        mkdir -p test-results
+        
+        docker run --rm \
+          --network host \
+          -v ${{ github.workspace }}/test-results:/app/target/surefire-reports \
+          api-tests:latest \
+          mvn test -Dapi.url=http://localhost:8090/api
+          
+    - name: Publish Test Results
+      uses: dorny/test-reporter@v1
+      if: always()
+      with:
+        name: API Test Results
+        path: test-results/TEST-*.xml
+        reporter: java-junit
+        fail-on-error: false
+        
+    - name: Upload Test Artifacts
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: test-reports-${{ github.run_number }}
+        path: test-results/
+        retention-days: 7
+        
+    - name: Test Summary
+      if: always()
+      run: |
+        echo "## 🧪 Test Results Summary" >> $GITHUB_STEP_SUMMARY
+        echo "- **Environment**: Docker Containers" >> $GITHUB_STEP_SUMMARY
+        echo "- **API**: Mock Spring Boot Service" >> $GITHUB_STEP_SUMMARY
+        echo "- **Tests**: TestNG + REST Assured" >> $GITHUB_STEP_SUMMARY
+        
+        if [ -f test-results/TEST-*.xml ]; then
+          echo "- **Status**: ✅ Tests Completed" >> $GITHUB_STEP_SUMMARY
+          echo "- **Reports**: Available in artifacts" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "- **Status**: ❌ Tests Failed" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        echo "- **Commit**: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Branch**: ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+        
+    - name: Debug Info (if tests failed)
+      if: failure()
+      run: |
+        echo "API Logs:"
+        docker logs mock-api
+        echo ""
+        echo "Container Status:"
+        docker ps -a
+        echo ""
+        echo "Test Results Directory:"
+        ls -la test-results/ || echo "No test results directory"
+        
+    - name: Cleanup
+      if: always()
+      run: |
+        docker stop mock-api || true
+        docker rm mock-api || true

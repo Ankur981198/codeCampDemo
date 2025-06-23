@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<suite name="Simple Working Test Suite">
+    <test name="Simple Tests">
+        <classes>
+            <class name="com.nashTech.BaseTest"/>
+        </classes>
+    </test>
+</suite>

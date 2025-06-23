@@ -1,0 +1,47 @@
+services:
+  # Mock API Service
+  mock-api:
+    build:
+      context: ../mock-api
+      dockerfile: Dockerfile
+    ports:
+      - "8090:8090"
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+    networks:
+      - test-network
+
+  # API Tests Service
+  api-tests:
+    build:
+      context: ../api-tests
+      dockerfile: Dockerfile
+    environment:
+      - API_URL=http://mock-api:8090/api
+      - TEST_ENV=docker
+      - DOCKER_CONTAINER=true
+    depends_on:
+      - mock-api
+    networks:
+      - test-network
+    volumes:
+      - ../test-reports:/app/target/surefire-reports
+
+  # Test Report Viewer
+  report-viewer:
+    image: nginx:alpine
+    ports:
+      - "8080:80"
+    volumes:
+      - ../test-reports:/usr/share/nginx/html:ro
+    depends_on:
+      - api-tests
+    networks:
+      - test-network
+
+networks:
+  test-network:
+    driver: bridge
+
+volumes:
+  test-reports:
